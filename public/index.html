@@ -2427,6 +2427,8 @@
             <span style="font-size:1.2rem; -webkit-text-fill-color: #fff; opacity:0.8;">MAX</span>
         </div>
         <div class="loader-spinner"></div>
+        <div id="loader-status" style="margin-top: 20px; color: #666; font-size: 13px; text-align: center;">正在初始化...
+        </div>
     </div>
 
     <!-- Password Protection Screen -->
@@ -3267,7 +3269,14 @@
                     if (this._appInitialized) return;
                     this._appInitialized = true;
 
+                    // 状态更新函数
+                    const updateStatus = (text) => {
+                        const el = document.getElementById('loader-status');
+                        if (el) el.textContent = text;
+                    };
+
                     // 1. 获取后端配置
+                    updateStatus('正在连接服务器...');
                     try {
                         const res = await fetch('/api/config');
                         const config = await res.json();
@@ -3283,21 +3292,34 @@
 
                         // 如果配置了反代地址，进行 IP 检测并切换
                         if (config.tmdb_proxy_url) {
+                            updateStatus('正在检测网络环境...');
                             await this.setupTmdbProxy(config.tmdb_proxy_url);
                         }
                     } catch (e) {
                         console.error('Config Load Error:', e);
+                        updateStatus('⚠️ 服务器连接失败');
                     }
 
                     // 2. 如果获取到了 Key，加载数据
                     if (TMDB_API_KEY) {
-                        await this.fetchHero();
-                        this.fetchAllLists();
+                        updateStatus('正在加载首页内容...');
+                        try {
+                            await this.fetchHero();
+                        } catch (e) {
+                            console.error('[InitApp] Hero 加载失败:', e);
+                        }
+                        try {
+                            this.fetchAllLists();
+                        } catch (e) {
+                            console.error('[InitApp] Lists 加载失败:', e);
+                        }
                     } else {
                         console.warn('TMDB_API_KEY 未配置');
+                        updateStatus('⚠️ API 未配置');
                     }
 
                     // 3. 移除 Loading 遮罩 (平滑过渡)
+                    updateStatus('加载完成');
                     setTimeout(() => {
                         const loader = document.getElementById('app-loader');
                         if (loader) loader.classList.add('hidden');
@@ -4022,9 +4044,24 @@
                 // 设置 TMDB 反代（针对大陆用户）
                 async setupTmdbProxy(proxyUrl) {
                     let isCN = false;
+
+                    // 超时 fetch（fetch 原生不支持 timeout 选项，需用 AbortController）
+                    const fetchWithTimeout = async (url, timeoutMs = 3000) => {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+                        try {
+                            const res = await fetch(url, { signal: controller.signal });
+                            clearTimeout(timeoutId);
+                            return res;
+                        } catch (e) {
+                            clearTimeout(timeoutId);
+                            throw e;
+                        }
+                    };
+
                     try {
                         // 1. 优先使用 Cloudflare Trace (稳定、无速率限制)
-                        const res = await fetch('https://www.cloudflare.com/cdn-cgi/trace', { timeout: 3000 });
+                        const res = await fetchWithTimeout('https://www.cloudflare.com/cdn-cgi/trace', 3000);
                         if (res.ok) {
                             const text = await res.text();
                             const matches = text.match(/loc=([A-Z]+)/);
@@ -4034,9 +4071,9 @@
                         }
                     } catch (e) {
                         // 2. 降级到 ipapi.co (有速率限制，仅作为备选)
-                        console.log('[IP检测] CF Trace 失败，尝试 ipapi.co...');
+                        console.log('[IP检测] CF Trace 失败，尝试 ipapi.co...', e.message || e);
                         try {
-                            const res = await fetch('https://ipapi.co/json/', { timeout: 3000 });
+                            const res = await fetchWithTimeout('https://ipapi.co/json/', 3000);
                             if (res.ok) {
                                 const data = await res.json();
                                 if (data.country_code === 'CN') isCN = true;
@@ -4044,13 +4081,14 @@
                                 console.warn('[IP检测] ipapi.co 响应异常:', res.status);
                             }
                         } catch (e2) {
-                            console.warn('[IP检测] 所有接口均失败，无法自动切换线路', e2);
+                            // 即使检测失败也不阻塞，继续执行
+                            console.warn('[IP检测] 所有接口均失败，跳过自动切换');
                         }
                     }
 
                     if (isCN) {
                         console.log('[IP检测] 检测到大陆IP，启用TMDB反代:', proxyUrl);
-                        TMDB_BASE_URL = proxyUrl + '/api/3';
+                        TMDB_BASE_URL = proxyUrl + '/3';
                         TMDB_IMG_URL = proxyUrl + '/t/p/w342';
                         TMDB_BACKDROP_URL = proxyUrl + '/t/p/original';
                     } else {
@@ -4299,6 +4337,10 @@
                                     rawData: item
                                 }));
                             }
+                        })
+                        .catch(e => {
+                            console.error('[Hero] 加载失败:', e);
+                            // 不抛出错误，允许 initApp 继续执行
                         });
                 },
 
