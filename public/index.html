@@ -203,6 +203,31 @@
             -moz-osx-font-smoothing: grayscale;
         }
 
+        /* 📱 全屏播放模式：移除状态栏 padding，让视频占满全屏 */
+        body.dplayer-fullscreen-active {
+            padding-top: 0 !important;
+        }
+
+        /* 📱 DPlayer 全屏容器样式优化 */
+        .dplayer-fulled,
+        .dplayer-web-fullscreen {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 2147483647 !important;
+            background: #000 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            border-radius: 0 !important;
+        }
+
+        /* 全屏时隐藏导航栏 */
+        body.dplayer-fullscreen-active .navbar-custom {
+            display: none !important;
+        }
+
         /* 性能优化：图片默认优化 */
         img {
             content-visibility: auto;
@@ -2520,10 +2545,11 @@
             background: #000 !important;
         }
 
-        /* 确保 body 和 html 在全屏时不会滚动 */
+        /* 确保 body 和 html 在全屏时不会滚动，并移除安全区域 padding */
         html:has(.dplayer-fulled),
         body:has(.dplayer-fulled) {
             overflow: hidden !important;
+            padding-top: 0 !important;
         }
 
         /* 隐藏导航栏 */
@@ -5464,16 +5490,80 @@
                             }
                         }, 500);
 
-                        // 添加全屏横屏功能（手机端）
-                        dp.on('fullscreen', () => {
+                        // 添加全屏横屏功能（手机端）+ 📱 Android 状态栏管理
+                        // 检测 Capacitor 插件
+                        const { StatusBar } = typeof Capacitor !== 'undefined' ? Capacitor.Plugins : {};
+
+                        // 进入全屏处理函数
+                        const enterFullscreenMode = async () => {
+                            // 1. 标记 body 为全屏状态（移除 safe-area padding）
+                            document.body.classList.add('dplayer-fullscreen-active');
+
+                            // 2. 📱 调用 Android 原生全屏接口（移除 padding + 旋转横屏 + 隐藏状态栏）
+                            if (window.AndroidFullscreen) {
+                                window.AndroidFullscreen.enter();
+                                console.log('[Fullscreen] Android 原生全屏已启用');
+                            }
+
+                            // 3. Capacitor StatusBar 插件（作为备用）
+                            if (StatusBar) {
+                                try {
+                                    await StatusBar.setOverlaysWebView({ overlay: true });
+                                    await StatusBar.hide();
+                                    console.log('[Fullscreen] 状态栏已隐藏');
+                                } catch (e) {
+                                    console.warn('[Fullscreen] StatusBar hide error:', e);
+                                }
+                            }
+
+                            // 4. Web API 锁定横屏（作为备用）
                             if (screen.orientation && screen.orientation.lock) {
                                 screen.orientation.lock('landscape').catch(() => { });
                             }
-                        });
+                        };
 
-                        dp.on('fullscreen_cancel', () => {
+                        // 退出全屏处理函数
+                        const exitFullscreenMode = async () => {
+                            // 1. 移除全屏状态标记（恢复 safe-area padding）
+                            document.body.classList.remove('dplayer-fullscreen-active');
+
+                            // 2. 📱 调用 Android 原生退出全屏接口（恢复 padding + 解锁方向 + 显示状态栏）
+                            if (window.AndroidFullscreen) {
+                                window.AndroidFullscreen.exit();
+                                console.log('[Fullscreen] Android 原生全屏已退出');
+                            }
+
+                            // 3. Capacitor StatusBar 插件（作为备用）
+                            if (StatusBar) {
+                                try {
+                                    await StatusBar.show();
+                                    await StatusBar.setOverlaysWebView({ overlay: false });
+                                    console.log('[Fullscreen] 状态栏已恢复');
+                                } catch (e) {
+                                    console.warn('[Fullscreen] StatusBar show error:', e);
+                                }
+                            }
+
+                            // 4. Web API 解锁屏幕方向（作为备用）
                             if (screen.orientation && screen.orientation.unlock) {
                                 screen.orientation.unlock();
+                            }
+                        };
+
+                        // 监听 DPlayer 全屏事件
+                        dp.on('fullscreen', enterFullscreenMode);
+                        dp.on('fullscreen_cancel', exitFullscreenMode);
+
+                        // 监听 DPlayer Web 全屏事件
+                        dp.on('webfullscreen', enterFullscreenMode);
+                        dp.on('webfullscreen_cancel', exitFullscreenMode);
+
+                        // 监听浏览器原生全屏 API（备用）
+                        document.addEventListener('fullscreenchange', () => {
+                            if (document.fullscreenElement) {
+                                enterFullscreenMode();
+                            } else {
+                                exitFullscreenMode();
                             }
                         });
 
