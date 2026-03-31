@@ -129,7 +129,7 @@
 
     <!-- 非关键脚本 (延迟加载) -->
     <script data-cfasync="false" src="libs/js/hls.min.js" defer></script>
-    <script data-cfasync="false" src="libs/js/ad-filter.js?v=2.5" defer></script>
+    <script data-cfasync="false" src="libs/js/ad-filter.js?v=4.0" defer></script>
     <script data-cfasync="false" src="libs/js/DPlayer.min.js" defer></script>
     <script data-cfasync="false" src="libs/js/bootstrap.bundle.min.js" defer></script>
 
@@ -2654,6 +2654,96 @@
             cursor: pointer;
         }
 
+        /* 邮箱输入框图标 */
+        .password-input-icon {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.35);
+            font-size: 16px;
+            pointer-events: none;
+        }
+
+        /* 登录模式切换按钮 */
+        .login-mode-switch {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .mode-switch-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 22px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .mode-switch-btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 20px;
+            padding: 1px;
+            background: linear-gradient(135deg, #e50914, #ff6b6b, #e50914);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .mode-switch-btn:hover {
+            color: #fff;
+            background: rgba(229, 9, 20, 0.1);
+            border-color: rgba(229, 9, 20, 0.4);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(229, 9, 20, 0.15);
+        }
+
+        .mode-switch-btn:hover::before {
+            opacity: 1;
+        }
+
+        .mode-switch-btn i {
+            font-size: 14px;
+        }
+
+        /* 注册引导链接 */
+        .login-register-link {
+            margin-top: 18px;
+            text-align: center;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .login-register-link a {
+            color: #e50914;
+            text-decoration: none;
+            font-weight: 500;
+            margin-left: 6px;
+            transition: all 0.25s ease;
+        }
+
+        .login-register-link a:hover {
+            color: #ff5151;
+            text-shadow: 0 0 8px rgba(229, 9, 20, 0.4);
+        }
+
+        .login-register-link a i {
+            font-size: 11px;
+            margin-right: 2px;
+        }
+
         /* ========== Firefox Android 闪烁修复 ========== */
         /* 在移动端禁用可能导致渲染问题的效果 */
         @media (max-width: 768px),
@@ -2855,7 +2945,7 @@
         </div>
     </div>
 
-    <!-- Password Protection Screen -->
+    <!-- Login Screen (V2Board + Standalone Password) -->
     <div id="password-screen" class="password-screen" style="display: none;">
         <div class="password-container">
             <div class="password-logo">
@@ -2863,15 +2953,43 @@
                     <img src="icon.png" style="height: 32px; margin-right: 8px; border-radius: 8px;">视界 <span
                         style="font-size:1rem; -webkit-text-fill-color: #fff; opacity:0.8;">MAX</span>
                 </div>
-                <div class="password-logo-subtitle"><i class="fas fa-lock"></i> 需要密码才能访问</div>
+                <div class="password-logo-subtitle"><i class="fas fa-shield-alt"></i> 请登录以继续</div>
             </div>
 
             <div id="password-error" class="password-error" style="display: none;">
                 <i class="fas fa-exclamation-circle"></i>
-                <span id="password-error-text">密码错误，请重试</span>
+                <span id="password-error-text">登录失败</span>
             </div>
 
-            <form id="password-form" onsubmit="return handlePasswordSubmit(event);">
+            <!-- V2Board 登录模式 (默认) -->
+            <form id="v2board-form" onsubmit="return handleV2boardLogin(event);">
+                <div class="password-input-group">
+                    <input type="email" id="v2board-email" class="password-input" placeholder="请输入邮箱地址"
+                        autocomplete="email" required>
+                    <span class="password-input-icon"><i class="fas fa-envelope"></i></span>
+                </div>
+
+                <div class="password-input-group">
+                    <input type="password" id="v2board-password" class="password-input" placeholder="请输入密码"
+                        autocomplete="current-password" required>
+                    <button type="button" class="password-toggle" onclick="toggleV2boardPasswordVisibility()">
+                        <i id="v2board-eye" class="fas fa-eye"></i>
+                    </button>
+                </div>
+
+                <label class="password-remember">
+                    <input type="checkbox" id="v2board-remember" checked>
+                    <span>记住登录状态 (1年)</span>
+                </label>
+
+                <button type="submit" class="password-submit" id="v2board-submit-btn">
+                    <i class="fas fa-sign-in-alt"></i>
+                    <span>登录</span>
+                </button>
+            </form>
+
+            <!-- 独立密码登录模式 -->
+            <form id="password-form" style="display: none;" onsubmit="return handlePasswordSubmit(event);">
                 <div class="password-input-group">
                     <input type="password" id="password-input" class="password-input" placeholder="请输入访问密码"
                         autocomplete="current-password" required>
@@ -2890,6 +3008,28 @@
                     <span>验证密码</span>
                 </button>
             </form>
+
+            <!-- 模式切换按钮 -->
+            <div class="login-mode-switch">
+                <button type="button" id="switch-to-password" class="mode-switch-btn"
+                    onclick="switchLoginMode('password')">
+                    <i class="fas fa-key"></i>
+                    <span>使用独立密码登录</span>
+                </button>
+                <button type="button" id="switch-to-v2board" class="mode-switch-btn" style="display: none;"
+                    onclick="switchLoginMode('v2board')">
+                    <i class="fas fa-user-circle"></i>
+                    <span>使用机场账户登录</span>
+                </button>
+            </div>
+
+            <!-- 注册引导 -->
+            <div id="register-link" class="login-register-link">
+                <span>还没有账号？</span>
+                <a href="https://domain.ednovas.xyz" target="_blank" rel="noopener noreferrer">
+                    <i class="fas fa-external-link-alt"></i> 注册机场账户
+                </a>
+            </div>
         </div>
     </div>
 
@@ -3170,22 +3310,24 @@
         </div>
 
         <div class="footer">
-            <!-- TV 模式开关 (非 TV 模式时显示，用于开启) -->
-            <div v-if="!isTVMode" class="tv-mode-toggle" @click="toggleTVMode" title="切换到TV模式（遥控器导航）">
-                <i class="fas fa-tv"></i>
-                <span>开启 TV 模式</span>
+            <div style="display: flex; justify-content: center; gap: 16px; flex-wrap: wrap;">
+                <!-- TV 模式开关 (非 TV 模式时显示，用于开启) -->
+                <div v-if="!isTVMode" class="tv-mode-toggle" @click="toggleTVMode" title="切换到TV模式（遥控器导航）">
+                    <i class="fas fa-tv"></i>
+                    <span>开启 TV 模式</span>
+                </div>
+                <!-- 设置按钮 -->
+                <div class="tv-mode-toggle" @click="showSettingsModal = true" title="偏好设置">
+                    <i class="fas fa-cog"></i>
+                    <span>偏好设置</span>
+                </div>
+                <!-- 退出登录按钮 -->
+                <div class="tv-mode-toggle" @click="confirmLogout" title="退出登录">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>退出登录</span>
+                </div>
             </div>
-            <!-- 设置按钮 -->
-            <div class="tv-mode-toggle" @click="showSettingsModal = true" style="margin-top: 10px;" title="偏好设置">
-                <i class="fas fa-cog"></i>
-                <span>偏好设置</span>
-            </div>
-            <!-- 退出登录按钮 -->
-            <div class="tv-mode-toggle" @click="confirmLogout" style="margin-top: 10px;" title="退出登录">
-                <i class="fas fa-sign-out-alt"></i>
-                <span>退出登录</span>
-            </div>
-            <div style="font-size:10px; margin-top:12px; opacity:0.5; user-select: none;">
+            <div style="font-size:10px; margin-top:10px; opacity:0.5; user-select: none;">
                 Data provided by TMDb & Maccms APIs
             </div>
         </div>
@@ -3199,6 +3341,36 @@
                     <h2 style="color: #fff; margin-bottom: 25px; font-size: 1.5rem;">
                         <i class="fas fa-cog" style="margin-right: 10px; color: #e50914;"></i>偏好设置
                     </h2>
+
+                    <!-- V2Board 账户信息 -->
+                    <div v-if="v2boardAccount"
+                        style="padding: 15px; margin-bottom: 20px; background: rgba(229, 9, 20, 0.08); border-radius: 10px; border: 1px solid rgba(229, 9, 20, 0.15);">
+                        <div style="color: #fff; font-size: 14px; font-weight: 600; margin-bottom: 10px;">
+                            <i class="fas fa-user-circle" style="margin-right: 8px; color: #e50914;"></i>机场账户
+                        </div>
+                        <div style="display: grid; gap: 6px; font-size: 13px; color: #aaa;">
+                            <div><i class="fas fa-envelope" style="width: 18px; color: #666;"></i> {{
+                                v2boardAccount.email }}</div>
+                            <div><i class="fas fa-box" style="width: 18px; color: #666;"></i> {{ v2boardAccount.planName
+                                }}</div>
+                            <div><i class="fas fa-clock" style="width: 18px; color: #666;"></i> {{
+                                v2boardAccount.expiryText }}</div>
+                            <div><i class="fas fa-chart-pie" style="width: 18px; color: #666;"></i> {{
+                                v2boardAccount.trafficText }}</div>
+                        </div>
+                        <button @click="refreshV2boardInfo" :disabled="v2bRefreshing"
+                            style="margin-top: 12px; width: 100%; padding: 8px; background: rgba(229,9,20,0.15); border: 1px solid rgba(229,9,20,0.3); border-radius: 8px; color: #ff6b6b; font-size: 13px; cursor: pointer; transition: all 0.2s;"
+                            onmouseover="this.style.background='rgba(229,9,20,0.25)'"
+                            onmouseout="this.style.background='rgba(229,9,20,0.15)'">
+                            <i :class="v2bRefreshing ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"
+                                style="margin-right: 6px;"></i>
+                            {{ v2bRefreshing ? '刷新中...' : '刷新订阅信息' }}
+                        </button>
+                        <div v-if="v2bRefreshMsg" style="margin-top: 8px; font-size: 12px; text-align: center;"
+                            :style="{ color: v2bRefreshOk ? '#46d369' : '#ff6b6b' }">
+                            {{ v2bRefreshMsg }}
+                        </div>
+                    </div>
 
                     <!-- 随机盲盒开关 -->
                     <div
@@ -3446,20 +3618,79 @@
 
     </div>
 
-    <!-- Password Verification Script (runs before Vue) -->
+    <!-- Auth Verification Script (runs before Vue) -->
     <script data-cfasync="false">
-        // SHA256 Hash Function (Pure JS implementation)
-        // SHA256 Hash Function (No longer used on client-side to avoid browser compat issues)
-        // async function sha256(message) {
-        //     const msgBuffer = new TextEncoder().encode(message);
-        //     const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-        //     const hashArray = Array.from(new Uint8Array(hashBuffer));
-        //     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        // }
-
         // Storage Keys
         const AUTH_STORAGE_KEY = 'emax_auth_hash';
         const AUTH_EXPIRY_KEY = 'emax_auth_expiry';
+        const AUTH_TYPE_KEY = 'emax_auth_type';          // 'v2board' | 'password'
+        const V2B_EMAIL_KEY = 'emax_v2board_email';
+        const V2B_TOKEN_KEY = 'emax_v2board_token';       // v2board auth_data token (用于免密续期)
+        const V2B_PLAN_KEY = 'emax_v2board_plan';
+        const V2B_LAST_CHECK_KEY = 'emax_v2board_last_check'; // 上次API验证时间
+        const V2B_EXPIRES_KEY = 'emax_v2board_expires';       // v2board 套餐到期时间 (ms)
+        const V2B_CHECK_INTERVAL = 5 * 24 * 60 * 60 * 1000;  // 每5天验证一次套餐
+        let v2boardExpiryTimer = null;
+
+        // V2Board 套餐到期实时检测（每2小时检查一次）
+        function startV2boardExpiryTimer() {
+            if (v2boardExpiryTimer) clearInterval(v2boardExpiryTimer);
+            const expiresAt = localStorage.getItem(V2B_EXPIRES_KEY);
+            if (!expiresAt || expiresAt === 'null') return; // 永久套餐不检测
+
+            v2boardExpiryTimer = setInterval(async () => {
+                const expires = parseInt(localStorage.getItem(V2B_EXPIRES_KEY) || '0');
+                if (expires > 0 && Date.now() > expires) {
+                    console.log('[V2Board] 本地检测到套餐已到期，调 API 确认...');
+
+                    // 先调 API 确认（用户可能已续费）
+                    const email = localStorage.getItem(V2B_EMAIL_KEY);
+                    const v2bToken = localStorage.getItem(V2B_TOKEN_KEY);
+                    if (v2bToken) {
+                        try {
+                            const res = await fetch('/api/auth/v2board/check', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ v2boardToken: v2bToken, email })
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                                console.log('[V2Board] API 确认套餐仍然有效，用户已续费');
+                                localStorage.setItem(AUTH_STORAGE_KEY, data.userToken);
+                                localStorage.setItem(V2B_LAST_CHECK_KEY, Date.now().toString());
+                                if (data.plan) {
+                                    localStorage.setItem(V2B_PLAN_KEY, JSON.stringify(data.plan));
+                                    if (data.plan.expiresAt) {
+                                        localStorage.setItem(V2B_EXPIRES_KEY, data.plan.expiresAt.toString());
+                                    } else {
+                                        localStorage.removeItem(V2B_EXPIRES_KEY);
+                                        clearInterval(v2boardExpiryTimer);
+                                    }
+                                }
+                                return; // 不登出
+                            }
+                        } catch (e) {
+                            console.error('[V2Board] API 确认失败，网络错误，暂不登出:', e);
+                            return;
+                        }
+                    }
+
+                    // API 确认已过期，执行登出
+                    clearInterval(v2boardExpiryTimer);
+                    console.log('[V2Board] API 确认套餐已过期，自动登出');
+                    localStorage.removeItem(AUTH_STORAGE_KEY);
+                    localStorage.removeItem(AUTH_EXPIRY_KEY);
+                    localStorage.removeItem(AUTH_TYPE_KEY);
+                    localStorage.removeItem(V2B_EMAIL_KEY);
+                    localStorage.removeItem(V2B_TOKEN_KEY);
+                    localStorage.removeItem(V2B_PLAN_KEY);
+                    localStorage.removeItem(V2B_LAST_CHECK_KEY);
+                    localStorage.removeItem(V2B_EXPIRES_KEY);
+                    alert('您的机场套餐已到期，请续费后重新登录。\n\n前往续费: domain.ednovas.xyz');
+                    location.reload();
+                }
+            }, 2 * 60 * 60 * 1000); // 每2小时检查
+        }
 
         // Check if already authenticated
         function isAuthenticated() {
@@ -3470,15 +3701,14 @@
 
             // Check if expired
             if (Date.now() > parseInt(expiry)) {
-                localStorage.removeItem(AUTH_STORAGE_KEY);
-                localStorage.removeItem(AUTH_EXPIRY_KEY);
+                // 不清除存储 - 让 checkAuthStatus 处理续期逻辑
                 return false;
             }
 
             return storedHash;
         }
 
-        // Toggle password visibility
+        // Toggle password visibility (standalone mode)
         function togglePasswordVisibility() {
             const input = document.getElementById('password-input');
             const eye = document.getElementById('password-eye');
@@ -3494,15 +3724,201 @@
             }
         }
 
+        // Toggle password visibility (v2board mode)
+        function toggleV2boardPasswordVisibility() {
+            const input = document.getElementById('v2board-password');
+            const eye = document.getElementById('v2board-eye');
+
+            if (input.type === 'password') {
+                input.type = 'text';
+                eye.classList.remove('fa-eye');
+                eye.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                eye.classList.remove('fa-eye-slash');
+                eye.classList.add('fa-eye');
+            }
+        }
+
+        // Switch between login modes
+        function switchLoginMode(mode) {
+            const v2boardForm = document.getElementById('v2board-form');
+            const passwordForm = document.getElementById('password-form');
+            const switchToPassword = document.getElementById('switch-to-password');
+            const switchToV2board = document.getElementById('switch-to-v2board');
+            const registerLink = document.getElementById('register-link');
+            const errorDiv = document.getElementById('password-error');
+
+            // Hide error
+            errorDiv.style.display = 'none';
+
+            if (mode === 'password') {
+                v2boardForm.style.display = 'none';
+                passwordForm.style.display = 'block';
+                switchToPassword.style.display = 'none';
+                switchToV2board.style.display = 'inline-flex';
+                registerLink.style.display = 'none';
+                setTimeout(() => document.getElementById('password-input').focus(), 100);
+            } else {
+                v2boardForm.style.display = 'block';
+                passwordForm.style.display = 'none';
+                switchToPassword.style.display = 'inline-flex';
+                switchToV2board.style.display = 'none';
+                registerLink.style.display = 'block';
+                setTimeout(() => document.getElementById('v2board-email').focus(), 100);
+            }
+        }
+
         // Show error message
         function showPasswordError(message) {
             const errorDiv = document.getElementById('password-error');
             const errorText = document.getElementById('password-error-text');
-            errorText.textContent = message;
+            errorText.innerHTML = message;
             errorDiv.style.display = 'flex';
         }
 
-        // Handle password submit
+        // Hide login screen with animation
+        function hideLoginScreen() {
+            const screen = document.getElementById('password-screen');
+            screen.classList.add('hidden');
+            setTimeout(() => {
+                screen.style.display = 'none';
+            }, 500);
+        }
+
+        // ========== V2Board 登录 ==========
+        async function handleV2boardLogin(event) {
+            event.preventDefault();
+
+            const emailInput = document.getElementById('v2board-email');
+            const passwordInput = document.getElementById('v2board-password');
+            const submitBtn = document.getElementById('v2board-submit-btn');
+            const remember = document.getElementById('v2board-remember').checked;
+            const errorDiv = document.getElementById('password-error');
+
+            errorDiv.style.display = 'none';
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>登录中...</span>';
+
+            try {
+                const res = await fetch('/api/auth/v2board', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: emailInput.value,
+                        password: passwordInput.value
+                    })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    // 保存认证信息
+                    localStorage.setItem(AUTH_STORAGE_KEY, data.userToken);
+                    localStorage.setItem(AUTH_TYPE_KEY, 'v2board');
+                    localStorage.setItem(V2B_EMAIL_KEY, emailInput.value);
+
+                    // 保存套餐信息（用于展示）
+                    if (data.plan) {
+                        localStorage.setItem(V2B_PLAN_KEY, JSON.stringify(data.plan));
+                        // 保存到期时间用于实时检测
+                        if (data.plan.expiresAt) {
+                            localStorage.setItem(V2B_EXPIRES_KEY, data.plan.expiresAt.toString());
+                        } else {
+                            localStorage.removeItem(V2B_EXPIRES_KEY); // 永久套餐
+                        }
+                    }
+
+                    // 保存 v2board token 用于免密续期验证
+                    localStorage.setItem(V2B_LAST_CHECK_KEY, Date.now().toString());
+                    if (data.v2boardToken) {
+                        localStorage.setItem(V2B_TOKEN_KEY, data.v2boardToken);
+                    }
+                    if (remember) {
+                        const expiry = Date.now() + (365 * 24 * 60 * 60 * 1000); // 1年
+                        localStorage.setItem(AUTH_EXPIRY_KEY, expiry.toString());
+                    } else {
+                        sessionStorage.setItem('emax_session_only', 'true');
+                        const expiry = Date.now() + (24 * 60 * 60 * 1000); // 1天
+                        localStorage.setItem(AUTH_EXPIRY_KEY, expiry.toString());
+                    }
+
+                    // 启动应用
+                    if (window.startApp) {
+                        await window.startApp();
+                    }
+
+                    startV2boardExpiryTimer(); // 启动套餐到期实时检测
+                    hideLoginScreen();
+                } else {
+                    // 显示具体错误
+                    let errorMsg = data.message || '登录失败';
+                    if (data.expired) {
+                        errorMsg = '⚠️ ' + errorMsg + '<br>请前往 <a href="https://domain.ednovas.xyz" target="_blank" style="color:#ff6b6b;text-decoration:underline;">domain.ednovas.xyz</a> 续费';
+                    }
+                    if (data.trafficExhausted) {
+                        errorMsg = '⚠️ ' + errorMsg;
+                    }
+                    showPasswordError(errorMsg);
+                    passwordInput.value = '';
+                    passwordInput.focus();
+                }
+            } catch (e) {
+                showPasswordError('网络连接失败，请稍后再试');
+                console.error('[V2Board] Login error:', e);
+            }
+
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i><span>登录</span>';
+            return false;
+        }
+
+        // V2Board Token 免密续期验证
+        async function revalidateV2boardSession() {
+            const email = localStorage.getItem(V2B_EMAIL_KEY);
+            const v2bToken = localStorage.getItem(V2B_TOKEN_KEY);
+
+            if (!v2bToken) {
+                return false; // 无 token，需要重新登录
+            }
+
+            try {
+                const res = await fetch('/api/auth/v2board/check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ v2boardToken: v2bToken, email })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    // 验证成功，更新最后检查时间
+                    localStorage.setItem(AUTH_STORAGE_KEY, data.userToken);
+                    localStorage.setItem(V2B_LAST_CHECK_KEY, Date.now().toString());
+                    if (data.plan) {
+                        localStorage.setItem(V2B_PLAN_KEY, JSON.stringify(data.plan));
+                        if (data.plan.expiresAt) {
+                            localStorage.setItem(V2B_EXPIRES_KEY, data.plan.expiresAt.toString());
+                        } else {
+                            localStorage.removeItem(V2B_EXPIRES_KEY);
+                        }
+                    }
+                    console.log('[V2Board] Token 验证成功');
+                    startV2boardExpiryTimer();
+                    return true;
+                } else {
+                    if (data.tokenExpired) {
+                        console.log('[V2Board] Token 已过期，需要重新登录');
+                    } else {
+                        console.log('[V2Board] 验证失败:', data.message);
+                    }
+                    return data; // 返回错误详情
+                }
+            } catch (e) {
+                console.error('[V2Board] 定期验证网络错误:', e);
+                return true; // 网络错误时不阻断使用
+            }
+        }
         async function handlePasswordSubmit(event) {
             event.preventDefault();
 
@@ -3511,18 +3927,11 @@
             const remember = document.getElementById('remember-password').checked;
             const errorDiv = document.getElementById('password-error');
 
-            // Hide previous error
             errorDiv.style.display = 'none';
-
-            // Disable button
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>验证中...</span>';
 
             try {
-                // Skip client-side hashing to avoid browser compatibility issues
-                // const passwordHash = await sha256(input.value);
-
-                // Verify with server (send plain password)
                 const res = await fetch('/api/auth/verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -3532,33 +3941,23 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    // 始终保存 Token 用于同步功能
                     localStorage.setItem(AUTH_STORAGE_KEY, data.passwordHash);
+                    localStorage.setItem(AUTH_TYPE_KEY, 'password');
 
-                    // 如果勾选了"记住登录"，设置长期有效期
                     if (remember) {
-                        const expiry = Date.now() + (365 * 24 * 60 * 60 * 1000); // 365 days
+                        const expiry = Date.now() + (365 * 24 * 60 * 60 * 1000);
                         localStorage.setItem(AUTH_EXPIRY_KEY, expiry.toString());
                     } else {
-                        // 不记住登录：设置会话有效期（浏览器关闭后）- 使用 sessionStorage 标记
                         sessionStorage.setItem('emax_session_only', 'true');
-                        // 设置短期有效期（1天），下次打开页面时会重新验证
                         const expiry = Date.now() + (24 * 60 * 60 * 1000);
                         localStorage.setItem(AUTH_EXPIRY_KEY, expiry.toString());
                     }
 
-                    // Start App and wait for data
                     if (window.startApp) {
                         await window.startApp();
                     }
 
-                    // Hide password screen with animation
-                    const screen = document.getElementById('password-screen');
-                    screen.classList.add('hidden');
-
-                    setTimeout(() => {
-                        screen.style.display = 'none';
-                    }, 500);
+                    hideLoginScreen();
                 } else {
                     showPasswordError('密码错误，请重试');
                     input.value = '';
@@ -3569,65 +3968,131 @@
                 console.error('Auth error:', e);
             }
 
-            // Re-enable button
             submitBtn.disabled = false;
             submitBtn.innerHTML = '<i class="fas fa-unlock"></i><span>验证密码</span>';
-
             return false;
         }
 
-        // Check auth status on page load
+        // ========== 页面加载认证检查 ==========
         async function checkAuthStatus() {
             try {
                 const res = await fetch('/api/auth/check');
                 const data = await res.json();
 
                 if (!data.requirePassword) {
-                    // No password required, start app directly
                     window.startApp && window.startApp();
                     return;
                 }
 
-                // Password required, check if already authenticated
-                const storedHash = isAuthenticated();
-                if (storedHash) {
-                    // Verify stored hash is still valid
-                    const verifyRes = await fetch('/api/auth/verify', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ passwordHash: storedHash })
-                    });
-                    const verifyData = await verifyRes.json();
+                const storedHash = localStorage.getItem(AUTH_STORAGE_KEY);
+                const expiry = localStorage.getItem(AUTH_EXPIRY_KEY);
+                const authType = localStorage.getItem(AUTH_TYPE_KEY);
 
-                    if (verifyData.success) {
-                        // Stored auth is valid, start app
-                        window.startApp && window.startApp();
+                // 有缓存的认证信息
+                if (storedHash && expiry) {
+                    const isExpired = Date.now() > parseInt(expiry);
+
+                    if (authType === 'v2board') {
+                        let renewResult;
+
+                        if (!isExpired) {
+                            // 登录未过期，检查是否需要定期验证套餐
+                            const lastCheck = parseInt(localStorage.getItem(V2B_LAST_CHECK_KEY) || '0');
+                            const needsCheck = (Date.now() - lastCheck) > V2B_CHECK_INTERVAL;
+
+                            if (!needsCheck) {
+                                // 5天内已验证过，直接进入
+                                startV2boardExpiryTimer(); // 启动实时检测
+                                window.startApp && window.startApp();
+                                return;
+                            }
+
+                            // 超过5天，静默验证
+                            renewResult = await revalidateV2boardSession();
+                            if (renewResult === true) {
+                                window.startApp && window.startApp();
+                                return;
+                            }
+                        } else {
+                            // 登录已过期（超过1年），尝试自动续期
+                            renewResult = await revalidateV2boardSession();
+                            if (renewResult === true) {
+                                // 续期成功，重设1年有效期
+                                const newExpiry = Date.now() + (365 * 24 * 60 * 60 * 1000);
+                                localStorage.setItem(AUTH_EXPIRY_KEY, newExpiry.toString());
+                                window.startApp && window.startApp();
+                                return;
+                            }
+                        }
+
+                        // 验证失败 - 清除状态，显示登录页面并提示
+                        clearAuthState();
+                        showLoginScreen();
+
+                        if (renewResult && renewResult.message) {
+                            setTimeout(() => {
+                                let msg = renewResult.message;
+                                if (renewResult.expired) {
+                                    msg += '<br>请前往 <a href="https://domain.ednovas.xyz" target="_blank" style="color:#ff6b6b;text-decoration:underline;">domain.ednovas.xyz</a> 续费';
+                                }
+                                showPasswordError('⚠️ 登录已过期: ' + msg);
+                            }, 200);
+                        }
                         return;
-                    } else {
-                        // Stored auth is invalid, clear it
-                        localStorage.removeItem(AUTH_STORAGE_KEY);
-                        localStorage.removeItem(AUTH_EXPIRY_KEY);
                     }
+
+                    // 独立密码模式
+                    if (!isExpired) {
+                        // 验证 hash 是否仍然有效
+                        const verifyRes = await fetch('/api/auth/verify', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ passwordHash: storedHash })
+                        });
+                        const verifyData = await verifyRes.json();
+
+                        if (verifyData.success) {
+                            window.startApp && window.startApp();
+                            return;
+                        }
+                    }
+
+                    // 密码验证失败或过期
+                    clearAuthState();
                 }
 
-                // Show password screen
-                const loader = document.getElementById('app-loader');
-                const screen = document.getElementById('password-screen');
-
-                // Hide loader, show password screen
-                if (loader) loader.classList.add('hidden');
-                screen.style.display = 'flex';
-
-                // Focus input
-                setTimeout(() => {
-                    document.getElementById('password-input').focus();
-                }, 100);
+                // 显示登录页面
+                showLoginScreen();
 
             } catch (e) {
                 console.error('Auth check error:', e);
-                // On error, try to start app anyway
                 window.startApp && window.startApp();
             }
+        }
+
+        // 清除认证状态
+        function clearAuthState() {
+            localStorage.removeItem(AUTH_STORAGE_KEY);
+            localStorage.removeItem(AUTH_EXPIRY_KEY);
+            localStorage.removeItem(AUTH_TYPE_KEY);
+            localStorage.removeItem(V2B_EMAIL_KEY);
+            localStorage.removeItem(V2B_TOKEN_KEY);
+            localStorage.removeItem(V2B_PLAN_KEY);
+            localStorage.removeItem(V2B_LAST_CHECK_KEY);
+            localStorage.removeItem(V2B_EXPIRES_KEY);
+            if (v2boardExpiryTimer) { clearInterval(v2boardExpiryTimer); v2boardExpiryTimer = null; }
+        }
+
+        // 显示登录页面
+        function showLoginScreen() {
+            const loader = document.getElementById('app-loader');
+            const screen = document.getElementById('password-screen');
+
+            if (loader) loader.classList.add('hidden');
+            screen.style.display = 'flex';
+
+            // 默认显示 v2board 模式
+            switchLoginMode('v2board');
         }
 
         // Run check when DOM is ready
@@ -3694,6 +4159,7 @@
         fetchClientPublicIP();
 
         let dp = null;
+        let _lastProgressSaveTime = 0;  // timeupdate 节流时间戳（每15秒保存一次）
 
         // 💾 倍速恢复辅助 — 多次重试确保 HLS.js 不会重置
         function ensurePlaybackSpeed(player) {
@@ -3708,11 +4174,15 @@
                     }
                 };
 
+                // 立即尝试
                 applySpeed();
+
+                // HLS.js 可能在加载后重置 playbackRate，延时重试
                 setTimeout(applySpeed, 200);
                 setTimeout(applySpeed, 500);
                 setTimeout(applySpeed, 1500);
 
+                // 在 playing 事件时也检查一次（视频真正开始播放时）
                 const onPlaying = () => {
                     applySpeed();
                     player.video.removeEventListener('playing', onPlaying);
@@ -3812,6 +4282,10 @@
                     syncStatus: 'idle',  // 同步状态: idle, syncing, success, error
                     syncToken: '',  // 用户同步 Token (密码哈希)
                     lastSyncTime: 0,  // 上次同步时间戳
+                    v2bRefreshing: false,   // 刷新订阅信息进行中
+                    v2bRefreshMsg: '',      // 刷新结果消息
+                    v2bRefreshOk: false,    // 刷新是否成功
+                    v2bPlanVersion: 0,      // 响应式触发器，递增时触发 v2boardAccount 重新计算
                     // footerClickCount removed (now using visible logout button)
 
                     rowLeftButtons: {}, // 存储各分类榜单左侧按钮显示状态 { movieRow: false, ... }
@@ -4098,6 +4572,39 @@
                 // 兼容旧代码的 availableSources（包含快速和慢速）
                 availableSources() {
                     return [...this.fastSources, ...this.slowSources];
+                },
+                // V2Board 账户信息（用于设置弹窗显示）
+                v2boardAccount() {
+                    // 引用 v2bPlanVersion 触发响应式更新
+                    const _v = this.v2bPlanVersion;
+                    const authType = localStorage.getItem('emax_auth_type');
+                    if (authType !== 'v2board') return null;
+
+                    const email = localStorage.getItem('emax_v2board_email') || '';
+                    const planJson = localStorage.getItem('emax_v2board_plan');
+                    if (!planJson) return { email, planName: '未知', expiryText: '未知', trafficText: '未知' };
+
+                    try {
+                        const plan = JSON.parse(planJson);
+                        let expiryText = '永久有效';
+                        if (plan.expiresAt) {
+                            const d = new Date(plan.expiresAt);
+                            const remain = Math.ceil((plan.expiresAt - Date.now()) / (24 * 60 * 60 * 1000));
+                            expiryText = d.toLocaleDateString() + (remain > 0 ? ` (剩余${remain}天)` : ' (已过期)');
+                        }
+
+                        let trafficText = '无限流量';
+                        if (plan.traffic && !plan.traffic.unlimited && plan.traffic.total > 0) {
+                            const usedGB = (plan.traffic.used / (1024 ** 3)).toFixed(2);
+                            const totalGB = (plan.traffic.total / (1024 ** 3)).toFixed(2);
+                            const pct = ((plan.traffic.used / plan.traffic.total) * 100).toFixed(1);
+                            trafficText = `${usedGB} / ${totalGB} GB (${pct}%)`;
+                        }
+
+                        return { email, planName: plan.name || '未知套餐', expiryText, trafficText };
+                    } catch (e) {
+                        return { email, planName: '未知', expiryText: '未知', trafficText: '未知' };
+                    }
                 }
             },
             methods: {
@@ -4497,6 +5004,8 @@
                         progressTime: Math.round(progress) || 0,
                         progressDuration: Math.round(duration) || 0,
                         watchedAt: new Date().toISOString(),
+                        // 记住用户最后使用的资源站
+                        lastSourceKey: this.currentSource?.site_key || null,
                         // 保存播放所需的数据（用于直接播放）
                         groupData: groupData ? {
                             name: groupData.name,
@@ -4552,6 +5061,61 @@
                             }
                         }
                         console.log('[观看历史] 已清除');
+                    }
+                },
+
+                // 手动刷新 V2Board 订阅信息
+                async refreshV2boardInfo() {
+                    this.v2bRefreshing = true;
+                    this.v2bRefreshMsg = '';
+                    try {
+                        const v2bToken = localStorage.getItem('emax_v2board_token');
+                        const email = localStorage.getItem('emax_v2board_email');
+                        if (!v2bToken) {
+                            this.v2bRefreshMsg = '无验证凭证，请重新登录';
+                            this.v2bRefreshOk = false;
+                            return;
+                        }
+                        const res = await fetch('/api/auth/v2board/check', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ v2boardToken: v2bToken, email })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            localStorage.setItem('emax_auth_hash', data.userToken);
+                            localStorage.setItem('emax_v2board_last_check', Date.now().toString());
+                            if (data.plan) {
+                                localStorage.setItem('emax_v2board_plan', JSON.stringify(data.plan));
+                                if (data.plan.expiresAt) {
+                                    localStorage.setItem('emax_v2board_expires', data.plan.expiresAt.toString());
+                                }
+                            }
+                            this.v2bRefreshMsg = '✅ 订阅信息已更新';
+                            this.v2bRefreshOk = true;
+                            this.v2bPlanVersion++;  // 触发 computed 重新计算
+                        } else {
+                            // 套餐过期或流量用尽 → 提示后自动登出
+                            if (data.expired || data.trafficExhausted) {
+                                this.v2bRefreshMsg = '⚠️ ' + data.message + '，3秒后自动登出...';
+                                this.v2bRefreshOk = false;
+                                this.v2bRefreshing = false;
+                                setTimeout(() => {
+                                    clearAuthState();
+                                    showLoginScreen();
+                                    location.reload();
+                                }, 3000);
+                                return;
+                            }
+                            this.v2bRefreshMsg = '❌ ' + (data.message || '刷新失败');
+                            this.v2bRefreshOk = false;
+                        }
+                    } catch (e) {
+                        this.v2bRefreshMsg = '❌ 网络错误';
+                        this.v2bRefreshOk = false;
+                    } finally {
+                        this.v2bRefreshing = false;
+                        setTimeout(() => { this.v2bRefreshMsg = ''; }, 5000);
                     }
                 },
 
@@ -4719,8 +5283,18 @@
                         proxySources.sort((a, b) => a.latency - b.latency);
                         otherSources.sort((a, b) => a.latency - b.latency);
 
-                        // 选择最佳资源
-                        let bestSource = directSources[0] || proxySources[0] || otherSources[0] || sourcesWithKey[0];
+                        // 选择最佳资源：优先使用用户上次选择的资源站
+                        let bestSource = null;
+                        if (item.lastSourceKey) {
+                            bestSource = sourcesWithKey.find(s => s.site_key === item.lastSourceKey);
+                            if (bestSource) {
+                                console.log('[观看历史] 恢复上次资源站:', bestSource.site_name);
+                            }
+                        }
+                        // 回退：按延迟排序选最快的
+                        if (!bestSource) {
+                            bestSource = directSources[0] || proxySources[0] || otherSources[0] || sourcesWithKey[0];
+                        }
                         const testTypeLabel = bestSource?._testType === 'direct' ? '🎬直连' : (bestSource?._testType === 'proxy' ? '🔀代理' : '📡服务器');
                         console.log('[观看历史] 选择资源站:', bestSource?.site_name, '延迟:', bestSource?.latency, '类型:', testTypeLabel);
 
@@ -5129,10 +5703,7 @@
                             .then(() => console.log('[投屏] 呼出投屏菜单成功'))
                             .catch((err) => {
                                 // 错误处理：
-                                // DOMException: The prompt could not be shown. (通常是因为没开机、没搜到设备或非 HTTPS)
                                 console.log('[投屏] 无法显示投屏菜单:', err);
-
-                                // 只有在明确报错无法显示菜单时，才提示用户
                                 alert('未找到投屏设备。\n\n请先在手机下拉通知栏 → 点击「投屏/Cast」→ 搜索并连接您的电视，连接成功后再点击一键投屏即可。');
                             });
                         return;
@@ -5998,8 +6569,9 @@
                             return;
                         }
 
-                        // 记住当前选中的资源站信息
+                        // 记住当前选中的资源站信息和集数
                         const currentSiteKey = this.currentSource?.site_key;
+                        const currentEpName = this.currentEpisodeName || this.episodeList?.find(ep => ep.url === this.currentUrl)?.name;
 
                         // 完整重新搜索
                         const res = await fetch(`/api/search?wd=${encodeURIComponent(searchName)}&nocache=1`);
@@ -6157,6 +6729,7 @@
                 play(url) {
                     this.currentUrl = url;
                     this.playbackErrorCount = 0;  // 重置错误计数
+                    this._proxyRetried = false;    // 重置代理重试标记
 
                     // 🔆 播放时保持屏幕常亮
                     this.requestWakeLock();
@@ -6174,17 +6747,45 @@
                         console.log('[播放器] 🌐 使用代理播放:', finalUrl.substring(0, 80) + '...');
                     }
 
-                    const setupErrorHandling = () => {
-                        // 监听播放错误，自动切换到下一个可用线路
-                        dp.on('error', () => {
-                            this.handlePlaybackError();
-                        });
+                    // 🛡️ 广告过滤：通过 Cloudflare Worker 代理过滤 DISCONTINUITY 广告标签
+                    // CF Worker 在边缘节点进行，不会被 CDN 屏蔽
+                    // 仅对直连 M3U8 URL 生效（非已通过代理的 URL）
+                    let adFilterProxyUsed = false;
+                    const originalUrl = finalUrl;  // 保存原始 URL 供代理失败回退
+                    const isDirectM3U8 = url && url.includes('.m3u8') && !(this.currentSource && this.currentSource._useProxy);
+                    if (window.AdFilter && window.AdFilter.isEnabled() && isDirectM3U8 && this.corsProxyUrl) {
+                        finalUrl = this.corsProxyUrl + '/?url=' + encodeURIComponent(finalUrl);
+                        adFilterProxyUsed = true;
+                        console.log('[播放器] 🛡️ 广告过滤: M3U8 路由到 CF Worker 代理');
+                    } else if (window.AdFilter && window.AdFilter.isEnabled() && isDirectM3U8 && !this.corsProxyUrl) {
+                        console.warn('[播放器] ⚠️ 广告过滤已启用但未配置 CORS_PROXY_URL，无法过滤');
+                    }
 
-                        // 监听 HLS 错误
+                    const setupErrorHandling = () => {
+                        // 统一错误处理函数（dp.error 和 video.error 都会触发）
+                        const handleError = (source) => {
+                            // 正在进行代理回退重试时，忽略所有错误（等待重试结果）
+                            if (this._proxyRetrying) {
+                                console.log('[播放器] ⏳ 代理回退中，忽略错误 (' + source + ')');
+                                return;
+                            }
+                            // 如果使用了广告过滤代理，先回退到直连重试
+                            if (adFilterProxyUsed && !this._proxyRetried) {
+                                this._proxyRetried = true;
+                                this._proxyRetrying = true;
+                                console.log('[播放器] 🛡️ 代理播放失败，回退直连:', originalUrl.substring(0, 60));
+                                dp.switchVideo({ url: originalUrl, type: 'hls' });
+                                // 3秒后解除锁定（足够 switchVideo 完成加载）
+                                setTimeout(() => { this._proxyRetrying = false; }, 3000);
+                                return;
+                            }
+                            this.handlePlaybackError();
+                        };
+
+                        dp.on('error', () => handleError('dp'));
+
                         if (dp.video) {
-                            dp.video.addEventListener('error', () => {
-                                this.handlePlaybackError();
-                            });
+                            dp.video.addEventListener('error', () => handleError('video'));
                         }
                     };
 
@@ -6206,11 +6807,8 @@
                             ]
                         });
 
-                        // 🛡️ 独立广告检测（不修改 HLS.js，仅分析 M3U8）
-                        if (window.AdFilter && window.AdFilter.analyzeStreamUrl) {
-                            window.AdFilter.analyzeStreamUrl(finalUrl);
-                            console.log('[播放器] 🛡️ 已启动独立广告检测');
-                        }
+                        // 🛡️ 广告过滤已在 CF Worker 完成（M3U8 URL 已通过 corsProxyUrl 路由）
+                        // CF Worker 移除 DISCONTINUITY 广告分段，TS 直连 CDN
 
                         // 监听倍速变化，更新 UI
                         if (dp.video) {
@@ -7057,7 +7655,7 @@
                             const currentEp = this.episodeList?.find(ep => ep.url === this.currentUrl);
                             const episodeName = (this.episodeList?.length > 1 && currentEp) ? currentEp.name : null;
 
-                            console.log('[进度记忆] 当前集数:', episodeName, '当前URL:', this.currentUrl?.substring(0, 30));
+
 
                             // 如果距离结尾 < 2分钟，视为完播，清除进度
                             if (duration > 0 && currentTime > duration - 120) {
@@ -7072,7 +7670,7 @@
 
                             // 只有播放位置 > 1分钟才保存（防止从头播放的资源覆盖进度）
                             if (currentTime <= 60) {
-                                console.log('[进度记忆] 当前位置 < 1分钟，不保存进度和历史');
+
                                 return;
                             }
 
@@ -7082,7 +7680,7 @@
                                     date: new Date().toISOString()
                                 };
                                 localStorage.setItem(getProgressKey(), JSON.stringify(data));
-                                console.log('[进度记忆] 保存进度:', currentTime.toFixed(0), '秒, 集数:', episodeName);
+
 
                                 // 同时更新观看历史（只有进度 > 1分钟才更新，防止覆盖为0）
                                 if (movieName) {
@@ -7093,12 +7691,16 @@
                             }
                         };
 
-                        // 定时保存进度 (每15秒)
-                        const progressSaveInterval = setInterval(() => {
-                            if (dp.video && !dp.video.paused) {
-                                saveProgress(dp.video.currentTime);
+                        // 使用 timeupdate 事件保存进度（每15秒节流）
+                        dp.on('timeupdate', () => {
+                            const now = Date.now();
+                            if (now - _lastProgressSaveTime >= 15000) {
+                                _lastProgressSaveTime = now;
+                                if (dp.video && !dp.video.paused) {
+                                    saveProgress(dp.video.currentTime);
+                                }
                             }
-                        }, 15000);
+                        });
 
                         // 暂停时保存
                         dp.on('pause', () => {
@@ -7178,11 +7780,7 @@
                         dp.switchVideo({ url: finalUrl, type: 'hls' });
                         console.log('[进度记忆-切换] switchVideo 已调用' + (finalUrl !== url ? ' (代理模式)' : ''));
 
-                        // 🛡️ 切换视频后重新分析广告（直接使用 M3U8 URL，不依赖 blob src）
-                        if (window.AdFilter && window.AdFilter.analyzeStreamUrl) {
-                            window.AdFilter.analyzeStreamUrl(finalUrl);
-                            console.log('[播放器] 🛡️ 已启动独立广告检测 (切换)');
-                        }
+                        // 🛡️ 广告过滤已在 CF Worker 完成（M3U8 URL 已通过 corsProxyUrl 路由）
 
                         // 恢复新视频的进度
                         const restoreHandler = () => {
@@ -7240,20 +7838,28 @@
                             }
                         };
 
-                        dp.on('canplay', restoreHandler);
-                        console.log('[进度记忆-切换] canplay 监听器已添加');
+                        // 移除旧的 canplay 监听器，防止每次切集累积
+                        if (window._restoreCanplayHandler && dp.video) {
+                            dp.video.removeEventListener('canplay', window._restoreCanplayHandler);
+                        }
+                        window._restoreCanplayHandler = restoreHandler;
+                        dp.video.addEventListener('canplay', restoreHandler);
 
                         // 💾 重新绑定 ratechange 监听器（switchVideo 后 video 元素会更新）
-                        // 使用 DPlayer 的事件而非直接监听 video，确保兼容性
+                        // 使用命名函数引用 + 移除旧监听器，防止累积
+                        const _rateChangeHandler = () => {
+                            const speed = dp.video.playbackRate;
+                            try {
+                                localStorage.setItem('dplayer_speed', speed);
+                            } catch (e) { }
+                        };
                         setTimeout(() => {
                             if (dp.video) {
-                                dp.video.addEventListener('ratechange', () => {
-                                    const speed = dp.video.playbackRate;
-                                    try {
-                                        localStorage.setItem('dplayer_speed', speed);
-                                        console.log('[倍速保存] 切换后保存倍速:', speed + 'x');
-                                    } catch (e) { }
-                                });
+                                if (window._rateChangeHandler) {
+                                    dp.video.removeEventListener('ratechange', window._rateChangeHandler);
+                                }
+                                window._rateChangeHandler = _rateChangeHandler;
+                                dp.video.addEventListener('ratechange', _rateChangeHandler);
                             }
                         }, 100);
                     }
@@ -7646,8 +8252,8 @@
                         // 立即检查更新
                         reg.update();
 
-                        // 定期检查更新（每30分钟）
-                        setInterval(() => reg.update(), 30 * 60 * 1000);
+                        // 定期检查更新（每天一次）
+                        setInterval(() => reg.update(), 24 * 60 * 60 * 1000);
 
                         // 监听新版本安装
                         reg.addEventListener('updatefound', () => {

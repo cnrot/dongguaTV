@@ -4159,6 +4159,7 @@
         fetchClientPublicIP();
 
         let dp = null;
+        let _lastProgressSaveTime = 0;  // timeupdate 节流时间戳（每15秒保存一次）
 
         // 💾 倍速恢复辅助 — 多次重试确保 HLS.js 不会重置
         function ensurePlaybackSpeed(player) {
@@ -5003,6 +5004,8 @@
                         progressTime: Math.round(progress) || 0,
                         progressDuration: Math.round(duration) || 0,
                         watchedAt: new Date().toISOString(),
+                        // 记住用户最后使用的资源站
+                        lastSourceKey: this.currentSource?.site_key || null,
                         // 保存播放所需的数据（用于直接播放）
                         groupData: groupData ? {
                             name: groupData.name,
@@ -5280,8 +5283,18 @@
                         proxySources.sort((a, b) => a.latency - b.latency);
                         otherSources.sort((a, b) => a.latency - b.latency);
 
-                        // 选择最佳资源
-                        let bestSource = directSources[0] || proxySources[0] || otherSources[0] || sourcesWithKey[0];
+                        // 选择最佳资源：优先使用用户上次选择的资源站
+                        let bestSource = null;
+                        if (item.lastSourceKey) {
+                            bestSource = sourcesWithKey.find(s => s.site_key === item.lastSourceKey);
+                            if (bestSource) {
+                                console.log('[观看历史] 恢复上次资源站:', bestSource.site_name);
+                            }
+                        }
+                        // 回退：按延迟排序选最快的
+                        if (!bestSource) {
+                            bestSource = directSources[0] || proxySources[0] || otherSources[0] || sourcesWithKey[0];
+                        }
                         const testTypeLabel = bestSource?._testType === 'direct' ? '🎬直连' : (bestSource?._testType === 'proxy' ? '🔀代理' : '📡服务器');
                         console.log('[观看历史] 选择资源站:', bestSource?.site_name, '延迟:', bestSource?.latency, '类型:', testTypeLabel);
 
@@ -7642,7 +7655,7 @@
                             const currentEp = this.episodeList?.find(ep => ep.url === this.currentUrl);
                             const episodeName = (this.episodeList?.length > 1 && currentEp) ? currentEp.name : null;
 
-                            console.log('[进度记忆] 当前集数:', episodeName, '当前URL:', this.currentUrl?.substring(0, 30));
+
 
                             // 如果距离结尾 < 2分钟，视为完播，清除进度
                             if (duration > 0 && currentTime > duration - 120) {
@@ -7657,7 +7670,7 @@
 
                             // 只有播放位置 > 1分钟才保存（防止从头播放的资源覆盖进度）
                             if (currentTime <= 60) {
-                                console.log('[进度记忆] 当前位置 < 1分钟，不保存进度和历史');
+
                                 return;
                             }
 
@@ -7667,7 +7680,7 @@
                                     date: new Date().toISOString()
                                 };
                                 localStorage.setItem(getProgressKey(), JSON.stringify(data));
-                                console.log('[进度记忆] 保存进度:', currentTime.toFixed(0), '秒, 集数:', episodeName);
+
 
                                 // 同时更新观看历史（只有进度 > 1分钟才更新，防止覆盖为0）
                                 if (movieName) {
@@ -7678,12 +7691,16 @@
                             }
                         };
 
-                        // 定时保存进度 (每15秒)
-                        const progressSaveInterval = setInterval(() => {
-                            if (dp.video && !dp.video.paused) {
-                                saveProgress(dp.video.currentTime);
+                        // 使用 timeupdate 事件保存进度（每15秒节流）
+                        dp.on('timeupdate', () => {
+                            const now = Date.now();
+                            if (now - _lastProgressSaveTime >= 15000) {
+                                _lastProgressSaveTime = now;
+                                if (dp.video && !dp.video.paused) {
+                                    saveProgress(dp.video.currentTime);
+                                }
                             }
-                        }, 15000);
+                        });
 
                         // 暂停时保存
                         dp.on('pause', () => {
@@ -7821,20 +7838,28 @@
                             }
                         };
 
-                        dp.on('canplay', restoreHandler);
-                        console.log('[进度记忆-切换] canplay 监听器已添加');
+                        // 移除旧的 canplay 监听器，防止每次切集累积
+                        if (window._restoreCanplayHandler && dp.video) {
+                            dp.video.removeEventListener('canplay', window._restoreCanplayHandler);
+                        }
+                        window._restoreCanplayHandler = restoreHandler;
+                        dp.video.addEventListener('canplay', restoreHandler);
 
                         // 💾 重新绑定 ratechange 监听器（switchVideo 后 video 元素会更新）
-                        // 使用 DPlayer 的事件而非直接监听 video，确保兼容性
+                        // 使用命名函数引用 + 移除旧监听器，防止累积
+                        const _rateChangeHandler = () => {
+                            const speed = dp.video.playbackRate;
+                            try {
+                                localStorage.setItem('dplayer_speed', speed);
+                            } catch (e) { }
+                        };
                         setTimeout(() => {
                             if (dp.video) {
-                                dp.video.addEventListener('ratechange', () => {
-                                    const speed = dp.video.playbackRate;
-                                    try {
-                                        localStorage.setItem('dplayer_speed', speed);
-                                        console.log('[倍速保存] 切换后保存倍速:', speed + 'x');
-                                    } catch (e) { }
-                                });
+                                if (window._rateChangeHandler) {
+                                    dp.video.removeEventListener('ratechange', window._rateChangeHandler);
+                                }
+                                window._rateChangeHandler = _rateChangeHandler;
+                                dp.video.addEventListener('ratechange', _rateChangeHandler);
                             }
                         }, 100);
                     }
@@ -8227,8 +8252,8 @@
                         // 立即检查更新
                         reg.update();
 
-                        // 定期检查更新（每30分钟）
-                        setInterval(() => reg.update(), 30 * 60 * 1000);
+                        // 定期检查更新（每天一次）
+                        setInterval(() => reg.update(), 24 * 60 * 60 * 1000);
 
                         // 监听新版本安装
                         reg.addEventListener('updatefound', () => {
