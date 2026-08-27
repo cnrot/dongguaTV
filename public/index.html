@@ -8243,11 +8243,6 @@
                 doSearch() {
                     if (!this.keyword) return;
 
-                    if (this._evtSource) {
-                        this._evtSource.close();
-                        this._evtSource = null;
-                    }
-
                     this.loading = true;
                     this.searched = true;
                     this.rawList = [];
@@ -8265,51 +8260,29 @@
                     }
 
                     // 构建搜索 URL，包含原始标题用于智能搜索
-                    let url = `/api/search?wd=${encodeURIComponent(this.keyword)}&stream=true`;
+                    // ⚠️ 用非流式(stream=false)而非 SSE：Vercel serverless 会缓冲并截断 SSE 流，
+                    //   导致 done 事件丢失、搜索卡死/无结果(实测线上只有1条被截断的 data、无 done)。
+                    //    非流式返回完整 { list }，一次到位，不受流式缓冲影响。
+                    let url = `/api/search?wd=${encodeURIComponent(this.keyword)}&stream=false`;
                     if (this._originalTitle && this._originalTitle !== this.keyword) {
                         url += `&original=${encodeURIComponent(this._originalTitle)}`;
                     }
-                    this._evtSource = new EventSource(url);
-
-                    this._evtSource.onmessage = (e) => {
-                        try {
-                            const newItems = JSON.parse(e.data);
-                            if (Array.isArray(newItems) && newItems.length > 0) {
-                                this.rawList = this.rawList.concat(newItems);
-                                newItems.forEach(item => {
-                                    if (!item.vod_pic || item.vod_pic.includes('mac_default')) this.handleImgError(item.vod_name);
-                                });
-                                // ⏳ 深链加载帧：实时更新"已找到 N 个线路"，并用防抖在"源到达停顿~1.2s"时即打开
-                                //   (不必等最慢站点的 done)，由 openDetail 边测边选、首个可播源就起播。
-                                if (this._deepLink && !this._deepLink.done) {
-                                    const norm = (s) => (s || '').trim();
-                                    const g = this.groupedList.find(x => norm(x.name) === norm(this._deepLink.name))
-                                        || this.groupedList.find(x => norm(x.name).includes(norm(this._deepLink.name)));
-                                    this.deepLinkSourceCount = (g && g.sources) ? g.sources.length : 0;
-                                    if (this._dlDebounce) clearTimeout(this._dlDebounce);
-                                    this._dlDebounce = setTimeout(() => this.tryOpenDeepLink(false), 1200);
-                                }
-                            }
-                        } catch (err) { }
-                    };
-
-                    this._evtSource.addEventListener('done', () => {
+                    const timeoutId = setTimeout(() => { this.loading = false; }, 25000); // ⏱️ 兜底超时，防止一直转圈
+                    fetchT(url, null, 25000).then(async (res) => {
+                        let list = [];
+                        try { const data = await res.json(); list = (data && data.list) || []; } catch (e) { list = []; }
+                        clearTimeout(timeoutId);
+                        this.rawList = list;
+                        list.forEach(item => {
+                            if (!item.vod_pic || item.vod_pic.includes('mac_default')) this.handleImgError(item.vod_name);
+                        });
                         this.loading = false;
-                        if (this._evtSource) {
-                            this._evtSource.close();
-                            this._evtSource = null;
-                        }
-                        // 🔗 深链：搜索结束，定位打开(若防抖未先触发)；无匹配则判失败退出加载态
+                        // 🔗 深链：搜索结束，定位打开；无匹配则判失败退出加载态
                         this.$nextTick(() => this.tryOpenDeepLink(true));
-                    });
-
-                    this._evtSource.onerror = () => {
+                    }).catch((err) => {
+                        clearTimeout(timeoutId);
                         this.loading = false;
-                        if (this._evtSource) {
-                            this._evtSource.close();
-                            this._evtSource = null;
-                        }
-                        // 🔗 深链：搜索连接中断也用已到的源尝试打开，避免一直卡在加载帧
+                        // 🔗 深链：搜索连接失败也用已到的源尝试打开，避免一直卡在加载帧
                         if (this._deepLink && !this._deepLink.done) this.$nextTick(() => this.tryOpenDeepLink(true));
                         // ⬇️ 设备离线且搜索无果:搜的剧有离线缓存 → 直接进离线上下文(否则断网搜已下载的剧只会看到"无结果")
                         if (navigator.onLine === false && !(this.rawList || []).length && (!this._deepLink || this._deepLink.done)) {
@@ -8321,7 +8294,8 @@
                                 this._openOfflineContext(om);
                             }
                         }
-                    };
+                        console.warn('[搜索] 非流式搜索失败:', err);
+                    });
                 },
                 async openDetail(group) {
                     // ⬇️ 断网守卫:设备离线且该剧有离线缓存 → 跳过测速直接进离线上下文

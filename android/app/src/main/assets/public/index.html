@@ -6002,11 +6002,6 @@
                 doSearch() {
                     if (!this.keyword) return;
 
-                    if (this._evtSource) {
-                        this._evtSource.close();
-                        this._evtSource = null;
-                    }
-
                     this.loading = true;
                     this.searched = true;
                     this.rawList = [];
@@ -6024,39 +6019,27 @@
                     }
 
                     // 构建搜索 URL，包含原始标题用于智能搜索
-                    let url = `/api/search?wd=${encodeURIComponent(this.keyword)}&stream=true`;
+                    // ⚠️ 用非流式(stream=false)而非 SSE：Vercel serverless 会缓冲并截断 SSE 流，
+                    //   导致 done 事件丢失、搜索卡死/无结果。非流式返回完整 { list } 一次到位。
+                    let url = `/api/search?wd=${encodeURIComponent(this.keyword)}&stream=false`;
                     if (this._originalTitle && this._originalTitle !== this.keyword) {
                         url += `&original=${encodeURIComponent(this._originalTitle)}`;
                     }
-                    this._evtSource = new EventSource(url);
-
-                    this._evtSource.onmessage = (e) => {
-                        try {
-                            const newItems = JSON.parse(e.data);
-                            if (Array.isArray(newItems) && newItems.length > 0) {
-                                this.rawList = this.rawList.concat(newItems);
-                                newItems.forEach(item => {
-                                    if (!item.vod_pic || item.vod_pic.includes('mac_default')) this.handleImgError(item.vod_name);
-                                });
-                            }
-                        } catch (err) { }
-                    };
-
-                    this._evtSource.addEventListener('done', () => {
+                    const timeoutId = setTimeout(() => { this.loading = false; }, 25000); // ⏱️ 兜底超时
+                    fetchT(url, null, 25000).then(async (res) => {
+                        let list = [];
+                        try { const data = await res.json(); list = (data && data.list) || []; } catch (e) { list = []; }
+                        clearTimeout(timeoutId);
+                        this.rawList = list;
+                        list.forEach(item => {
+                            if (!item.vod_pic || item.vod_pic.includes('mac_default')) this.handleImgError(item.vod_name);
+                        });
                         this.loading = false;
-                        if (this._evtSource) {
-                            this._evtSource.close();
-                            this._evtSource = null;
-                        }
+                    }).catch((err) => {
+                        clearTimeout(timeoutId);
+                        this.loading = false;
+                        console.warn('[搜索] 非流式搜索失败:', err);
                     });
-
-                    this._evtSource.onerror = () => {
-                        this.loading = false;
-                        if (this._evtSource) {
-                            this._evtSource.close();
-                            this._evtSource = null;
-                        }
-                    };
                 },
                 async openDetail(group) {
                     this.currentGroup = group;
