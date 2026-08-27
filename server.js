@@ -144,10 +144,6 @@ const proxyRequiredSites = new Map();
 const PROXY_MEMORY_TTL = 24 * 60 * 60 * 1000; // 24小时后重新尝试直连
 const SLOW_THRESHOLD_MS = 1500; // 直连延迟超过此值视为慢速，尝试代理
 
-// IP 地理位置缓存 (避免频繁调用外部 API)
-const ipLocationCache = new Map();
-const IP_CACHE_TTL = 3600 * 1000; // 缓存1小时
-
 /**
  * 获取请求者的真实 IP 地址
  * 支持 Cloudflare, Nginx 等反向代理
@@ -171,83 +167,6 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
-}
-
-/**
- * 检测是否为私有/内网 IP 地址
- * @param {string} ip - IP 地址
- * @returns {boolean} - 是否是私有 IP
- */
-function isPrivateIP(ip) {
-    if (!ip) return false;
-    // IPv4 私有地址
-    if (/^127\./.test(ip)) return true;  // 127.0.0.0/8 (loopback)
-    if (/^10\./.test(ip)) return true;   // 10.0.0.0/8
-    if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip)) return true;  // 172.16.0.0/12
-    if (/^192\.168\./.test(ip)) return true;  // 192.168.0.0/16
-    if (/^169\.254\./.test(ip)) return true;  // 169.254.0.0/16 (link-local)
-    // IPv6 私有/特殊地址
-    if (ip === '::1') return true;  // loopback
-    if (/^fe80:/i.test(ip)) return true;  // link-local
-    if (/^fc00:/i.test(ip) || /^fd[0-9a-f]{2}:/i.test(ip)) return true;  // unique local
-    return false;
-}
-
-/**
- * 检测 IP 是否来自中国大陆（需要使用代理）
- * 支持从 X-Client-Public-IP 头获取客户端提供的公网 IP
- * 私有 IP 默认视为需要代理（假设部署在中国大陆内网环境）
- * @param {object} req - Express 请求对象
- * @returns {Promise<boolean>} - 是否需要使用代理
- */
-async function isChineseIP(req) {
-    // 1. 优先使用客户端提供的公网 IP (由前端从 api.ip.sb 获取)
-    const clientProvidedIP = req.headers['x-client-public-ip'];
-    // 2. 回退到服务端检测的 IP
-    const detectedIP = getClientIP(req);
-
-    // 使用客户端提供的 IP（如果有效且非私有）
-    let effectiveIP = clientProvidedIP && !isPrivateIP(clientProvidedIP) ? clientProvidedIP : detectedIP;
-
-    // 3. 如果有效 IP 仍然是私有的，直接返回 true（视为需要代理）
-    if (!effectiveIP || isPrivateIP(effectiveIP)) {
-        console.log(`[IP Detection] Private/LAN IP detected (${detectedIP}), treating as CN (proxy required)`);
-        return true;
-    }
-
-    // 检查缓存
-    const cached = ipLocationCache.get(effectiveIP);
-    if (cached && (Date.now() - cached.time < IP_CACHE_TTL)) {
-        return cached.isCN;
-    }
-
-    try {
-        const response = await axios.get(`https://api.ip.sb/geoip/${effectiveIP}`, {
-            timeout: 3000,
-            headers: { 'User-Agent': 'DongguaTV/1.0' }
-        });
-
-        const data = response.data;
-        // 检查是否是中国大陆 (排除港澳台)
-        let isCN = false;
-        if (data.country_code === 'CN') {
-            const excludeRegions = ['Hong Kong', 'Macau', 'Taiwan', '香港', '澳门', '台湾'];
-            const region = data.region || data.city || '';
-            if (!excludeRegions.some(r => region.includes(r))) {
-                isCN = true;
-            }
-        }
-
-        // 缓存结果
-        ipLocationCache.set(effectiveIP, { isCN, time: Date.now() });
-        console.log(`[IP Detection] ${effectiveIP} -> ${isCN ? '中国大陆' : '海外'}${clientProvidedIP ? ' (client-provided)' : ''}`);
-        return isCN;
-
-    } catch (error) {
-        // API 调用失败，默认不使用代理
-        console.error(`[IP Detection Error] ${effectiveIP}:`, error.message);
-        return false;
-    }
 }
 
 /**
@@ -927,8 +846,7 @@ async function renderSharePage(req, res, rawName) {
         const TMDB_API_KEY = process.env.TMDB_API_KEY;
         if (TMDB_API_KEY && name) {
             const TMDB_PROXY_URL = process.env['TMDB_PROXY_URL'];
-            const serverInChina = process.env['SERVER_IN_CHINA'] === 'true';
-            const base = (TMDB_PROXY_URL && serverInChina) ? `${TMDB_PROXY_URL.replace(/\/$/, '')}/api/3` : 'https://api.themoviedb.org/3';
+            const base = TMDB_PROXY_URL ? `${TMDB_PROXY_URL.replace(/\/$/, '')}/api/3` : 'https://api.themoviedb.org/3';
             const r = await axios.get(`${base}/search/multi`, { params: { api_key: TMDB_API_KEY, language: 'zh-CN', query: name }, timeout: 2500 });
             const hit = ((r.data && r.data.results) || []).find(x => x.poster_path || x.backdrop_path);
             if (hit) poster = `https://image.tmdb.org/t/p/w500${hit.poster_path || hit.backdrop_path}`;
@@ -2008,15 +1926,10 @@ app.get('/api/tmdb-proxy', async (req, res) => {
         // 判断是否来自中国大陆（支持 X-Client-Public-IP 头和私有 IP 检测）
         const TMDB_PROXY_URL = process.env['TMDB_PROXY_URL'];
 
-        // 只有配置了代理 URL 且用户来自中国大陆时，才使用代理
-        let useProxy = false;
-        if (TMDB_PROXY_URL) {
-            useProxy = await isChineseIP(req);
-        }
-
-        const TMDB_BASE = useProxy
+        // 只要配置了代理 URL 就一律走代理（不再按用户 IP 判定，避免 CDN 误判导致直连被墙）
+        const TMDB_BASE = TMDB_PROXY_URL
             ? `${TMDB_PROXY_URL.replace(/\/$/, '')}/api/3`  // 代理需要 /api/3 前缀
-            : 'https://api.themoviedb.org/3';  // 海外用户直连官方 API
+            : 'https://api.themoviedb.org/3';  // 未配置代理则直连官方 API
 
         // tmdbPath 格式如 /trending/all/week, /discover/movie 等
         const finalUrl = `${TMDB_BASE}${tmdbPath}`;
@@ -2181,8 +2094,7 @@ app.get('/api/preview', async (req, res) => {
         const TMDB_API_KEY = process.env.TMDB_API_KEY;
         if (TMDB_API_KEY && previewTmdbBudgetOk()) {
             const TMDB_PROXY_URL = process.env['TMDB_PROXY_URL'];
-            const serverInChina = process.env['SERVER_IN_CHINA'] === 'true';
-            const base = (TMDB_PROXY_URL && serverInChina) ? `${TMDB_PROXY_URL.replace(/\/$/, '')}/api/3` : 'https://api.themoviedb.org/3';
+            const base = TMDB_PROXY_URL ? `${TMDB_PROXY_URL.replace(/\/$/, '')}/api/3` : 'https://api.themoviedb.org/3';
             const r = await axios.get(`${base}/search/multi`, { params: { api_key: TMDB_API_KEY, language: 'zh-CN', query: name }, timeout: 2500 });
             const results = (r.data && r.data.results) || [];
             // 优先选既有海报又有简介的，其次有海报的，最后第一个
@@ -3177,13 +3089,12 @@ async function renderMediaPage(req, res, mediaType) {
     }
 
     try {
-        // 服务器端调用：根据 SERVER_IN_CHINA 环境变量决定是否使用代理
+        // 服务器端调用：根据是否配置 TMDB_PROXY_URL 决定是否使用代理
         const TMDB_PROXY_URL = process.env['TMDB_PROXY_URL'];
-        const serverInChina = process.env['SERVER_IN_CHINA'] === 'true';
 
-        const baseUrl = (TMDB_PROXY_URL && serverInChina)
-            ? `${TMDB_PROXY_URL.replace(/\/$/, '')}/api/3`  // 国内服务器使用代理
-            : 'https://api.themoviedb.org/3';  // 海外服务器直连
+        const baseUrl = TMDB_PROXY_URL
+            ? `${TMDB_PROXY_URL.replace(/\/$/, '')}/api/3`  // 配置了代理则使用代理
+            : 'https://api.themoviedb.org/3';  // 未配置代理则直连
 
         const detailUrl = `${baseUrl}/${mediaType}/${id}?api_key=${TMDB_API_KEY}&language=zh-CN`;
 
@@ -3332,14 +3243,12 @@ app.get('/sitemap.xml', async (req, res) => {
 
     if (TMDB_API_KEY) {
         try {
-            // 服务器端调用：根据 SERVER_IN_CHINA 环境变量决定是否使用代理
-            // 如果服务器在国内，设置 SERVER_IN_CHINA=true
+            // 服务器端调用：根据是否配置 TMDB_PROXY_URL 决定是否使用代理
             const TMDB_PROXY_URL = process.env['TMDB_PROXY_URL'];
-            const serverInChina = process.env['SERVER_IN_CHINA'] === 'true';
 
-            const baseUrl = (TMDB_PROXY_URL && serverInChina)
-                ? `${TMDB_PROXY_URL.replace(/\/$/, '')}/api/3`  // 国内服务器使用代理
-                : 'https://api.themoviedb.org/3';  // 海外服务器直连
+            const baseUrl = TMDB_PROXY_URL
+                ? `${TMDB_PROXY_URL.replace(/\/$/, '')}/api/3`  // 配置了代理则使用代理
+                : 'https://api.themoviedb.org/3';  // 未配置代理则直连
 
             // 获取热门电影 (前 40 部)
             const movieUrl = `${baseUrl}/movie/popular?api_key=${TMDB_API_KEY}&language=zh-CN&page=1`;
